@@ -73,7 +73,7 @@ class PersonalDataController extends Controller
                 Auth::login($user);
             }
 
-            // Save personal data
+            // Handle file uploads
             $data = $request->only([
                 'nama', 'alamat_jalan', 'rt', 'rw', 
                 'kabupaten_kota', 'kecamatan', 'kelurahan', 'kode_pos',
@@ -81,6 +81,30 @@ class PersonalDataController extends Controller
             ]);
             
             $data['user_id'] = Auth::id();
+            
+            // Handle KTP upload
+            if ($request->hasFile('foto_ktp')) {
+                $ktpFile = $request->file('foto_ktp');
+                $originalName = $ktpFile->getClientOriginalName();
+                $ktpPath = $ktpFile->storeAs('uploads/ktp', $originalName, 'public');
+                $data['foto_ktp'] = $ktpPath;
+            }
+            
+            // Handle KK upload
+            if ($request->hasFile('foto_kk')) {
+                $kkFile = $request->file('foto_kk');
+                $originalName = $kkFile->getClientOriginalName();
+                $kkPath = $kkFile->storeAs('uploads/kk', $originalName, 'public');
+                $data['foto_kk'] = $kkPath;
+            }
+            
+            // Handle pendukung upload if exists
+            if ($request->hasFile('pendukung')) {
+                $pendukungFile = $request->file('pendukung');
+                $originalName = $pendukungFile->getClientOriginalName();
+                $pendukungPath = $pendukungFile->storeAs('uploads/pendukung', $originalName, 'public');
+                $data['pendukung'] = $pendukungPath;
+            }
             
             // Create personal data
             $personalData = PersonalData::create($data);

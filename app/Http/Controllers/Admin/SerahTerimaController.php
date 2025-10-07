@@ -45,13 +45,17 @@ class SerahTerimaController extends Controller
             // Update atau buat record serah terima
             $serahTerima = $personalData->serahTerima ?? new SerahTerima();
             $serahTerima->personal_data_id = $personalData->id;
-            $serahTerima->foto_berkas = 'documents/' . $fileName;
+            $filePath = 'documents/' . $fileName;
+            $serahTerima->foto_berkas = $filePath;
             $serahTerima->save();
+
+            // Generate public URL
+            $publicUrl = asset('storage/' . $filePath);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Dokumen berhasil diunggah',
-                'file_path' => asset('storage/' . $serahTerima->foto_berkas)
+                'document_url' => $publicUrl,
+                'document_path' => $filePath
             ]);
         } catch (\Exception $e) {
             Log::error('Error uploading document: ' . $e->getMessage());
