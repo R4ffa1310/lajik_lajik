@@ -513,26 +513,32 @@
                 // Generate document upload section
                 const documentPreviews = `
                 <div class="mb-4">
-                    <h6 class="border-bottom pb-2">Upload Foto</h6>
-                    <div class="row">
-                        <div class="col-12 mb-3">
-                            <label class="form-label fw-semibold">Upload Foto <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <input type="file" name="foto_berkas" class="form-control d-none" accept="image/jpeg,image/png,application/pdf" required>
-                                <button type="button" class="btn btn-outline-secondary" onclick="document.querySelector('input[name=foto_berkas]').click()">
-                                    <i class="fas fa-folder-open me-1"></i> Pilih File
-                                </button>
-                                <button type="button" class="btn btn-primary upload-doc" data-doc-type="foto_berkas" data-item-id="${item.id}">
-                                    <i class="fas fa-upload me-1"></i> Upload
-                                </button>
+                    <h6 class="border-bottom pb-2">Unggah Dokumen Pendukung</h6>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="text-center mb-3">
+                                ${item.document_path ? 
+                                    `<img src="/storage/${item.document_path}" 
+                                          class="img-fluid img-thumbnail document-preview mb-2" 
+                                          style="max-height: 200px; cursor: pointer;" 
+                                          onclick="viewDocument('${item.document_path}')">` :
+                                    '<div class="text-muted py-4 border rounded">Belum ada dokumen diunggah</div>'
+                                }
                             </div>
-                            <small class="text-muted">Format: JPG, JPEG, PNG (Maks. 2MB)</small>
-                            ${item.serah_terima && item.serah_terima.foto_berkas ? `
-                            <div class="mt-2">
-                                <a href="/storage/${item.serah_terima.foto_berkas}" target="_blank" class="text-decoration-none">
-                                    <i class="fas fa-file-image me-1"></i> Lihat Foto
-                                </a>
-                            </div>` : ''}
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">Dokumen Pendukung</h6>
+                                    <p class="text-muted small mb-0">Unggah dokumen pendukung dalam format JPG, PNG, atau PDF (maks. 2MB)</p>
+                                </div>
+                                <div>
+                                    <button type="button" class="btn btn-primary upload-doc" 
+                                            data-doc-type="document" 
+                                            data-item-id="${item.id}">
+                                        <i class="fas fa-upload me-1"></i>
+                                        ${item.document_path ? 'Ganti Dokumen' : 'Unggah Dokumen'}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>`;
@@ -753,89 +759,97 @@
         });
 
         // Handle document upload
-        // Handle document upload
         $(document).on('click', '.upload-doc', function(e) {
             e.preventDefault();
-            const docType = $(this).data('doc-type');
+            const docType = $(this).data('doc');
             const itemId = $(this).data('item-id');
             const $button = $(this);
-            const $fileInput = $button.siblings('input[type="file"]');
-            
-            if ($fileInput[0].files.length === 0) {
-                showToast('error', 'Silakan pilih file terlebih dahulu');
-                $fileInput.trigger('click');
-                return;
-            }
+            const $row = $(this).closest('tr');
 
-            const file = $fileInput[0].files[0];
-            
-            // Check file size (2MB max)
-            if (file.size > 2 * 1024 * 1024) {
-                showToast('error', 'Ukuran file melebihi 2MB');
-                return;
-            }
+            // Create file input
+            const $fileInput = $('<input type="file" accept="image/*,.pdf" style="display: none;">');
 
-            // Check file type
-            const validTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-            if (!validTypes.includes(file.type)) {
-                showToast('error', 'Format file tidak didukung. Gunakan JPG, JPEG, atau PNG');
-                return;
-            }
+            $fileInput.on('change', function() {
+                const file = this.files[0];
+                if (!file) return;
 
-            const formData = new FormData();
-            formData.append('_token', '{{ csrf_token() }}');
-            formData.append('id', itemId);
-            formData.append('doc_type', docType);
-            formData.append('document', file);
-
-            // Show loading state
-            $button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Mengunggah...');
-
-            console.log('Uploading file:', file);
-            console.log('FormData:', formData);
-            
-            // Upload file
-            $.ajax({
-                url: '/admin/serah-terima/upload-document',
-                type: 'POST',
-                data: formData,
-                processData: false,
-                contentType: false,
-                success: function(response) {
-                    console.log('Upload response:', response);
-                    if (response.success && response.document_url) {
-                        // Use the full URL from the server
-                        const previewLink = `
-                            <div class="mt-2">
-                                <a href="${response.document_url}" target="_blank" class="text-decoration-none">
-                                    <i class="fas fa-file-image me-1"></i> Lihat Foto
-                                </a>
-                            </div>`;
-                        
-                        // Update the preview in the modal
-                        $button.closest('.mb-3').find('a').remove();
-                        $button.closest('.mb-3').append(previewLink);
-                        
-                        // Show success message
-                        showToast('success', 'Foto berhasil diunggah');
-                        
-                        // Reload the page to update the main table
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
-                    } else {
-                        showToast('error', response.message || 'Gagal mengunggah foto');
-                    }
-                },
-                error: function(xhr) {
-                    const errorMsg = xhr.responseJSON?.message || 'Terjadi kesalahan saat mengunggah foto';
-                    showToast('error', errorMsg);
-                    console.error('Upload error:', xhr);
-                },
-                complete: function() {
-                    $button.prop('disabled', false).html('<i class="fas fa-upload me-1"></i> Upload');
+                // Check file size (max 2MB)
+                if (file.size > 2 * 1024 * 1024) {
+                    showToast('error', 'Ukuran file maksimal 2MB');
+                    return;
                 }
+
+                const formData = new FormData();
+                formData.append('_token', '{{ csrf_token() }}');
+                formData.append('id', itemId);
+                formData.append('doc_type', docType);
+                formData.append('document', file);
+
+                // Show loading state
+                $button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Mengunggah...');
+
+                // Upload file
+                $.ajax({
+                    url: '/admin/personal-data/upload-document',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.success) {
+                            // Update the document preview in the same row
+                            const $preview = $row.find('.document-preview');
+                            if ($preview.length) {
+                                if (file.type.startsWith('image/')) {
+                                    $preview.html(`
+                                <img src="${URL.createObjectURL(file)}" 
+                                     class="img-thumbnail document-image" 
+                                     style="max-width: 100px; max-height: 100px; cursor: pointer;"
+                                     onclick="viewImage(this)"
+                                     data-doc="${docType}">
+                                <div class="mt-1">
+                                    <small class="text-muted">${file.name}</small>
+                                </div>
+                            `);
+                                } else {
+                                    $preview.html(`
+                                <i class="fas fa-file-pdf fa-3x text-danger"></i>
+                                <div class="mt-1">
+                                    <small class="text-muted">${file.name}</small>
+                                </div>
+                            `);
+                                }
+                            }
+
+                            // Show success message
+                            showToast('success', 'Dokumen berhasil diunggah');
+
+                            // Close any open modals
+                            $('.modal').modal('hide');
+
+                            // Reload the page to reflect changes
+                            setTimeout(() => {
+                                location.reload();
+                            }, 1000);
+                        } else {
+                            showToast('error', response.message || 'Gagal mengunggah dokumen');
+                        }
+                    },
+                    error: function(xhr) {
+                        let errorMessage = 'Terjadi kesalahan saat mengunggah dokumen';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        showToast('error', errorMessage);
+                    },
+                    complete: function() {
+                        $button.html('<i class="fas fa-upload me-1"></i> Unggah').prop('disabled', false);
+                    }
+                });
             });
+
+            // Trigger file input click
+            $fileInput.trigger('click');
         });
 
         // Helper function to show toast notifications
